@@ -1,0 +1,556 @@
+<?xml version="1.0"?>
+<robot name="cybertruck" xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <!-- <xacro:include filename="$(find truck_simulation)/urdf/wheel_cbt.xacro"/> -->
+
+  <xacro:arg name="gpu" default="false"/>
+  <xacro:property name="gpu" value="$(arg gpu)" />
+
+  <xacro:property name="robot_namespace" value="/steer_bot"/>
+
+  <xacro:include filename="$(find truck_simulation)/urdf/materials.xacro"/>
+  <xacro:include filename="$(find truck_simulation)/urdf/inertials.xacro"/>
+
+
+  <!-- Gazebo plugins -->
+  <gazebo>
+    <!-- Load ros_control plugin using the steer_bot_hardware_gazebo
+    implementation of the hardware_interface::RobotHW -->
+    <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so">
+      <robotNamespace>${robot_namespace}</robotNamespace>
+      <robotSimType>steer_bot_hardware_gazebo/SteerBotHardwareGazebo</robotSimType>
+      <legacyModeNS>false</legacyModeNS>
+    </plugin>
+  </gazebo>  
+
+  <!-- ****************** ROBOT CONSTANTS *******************************  -->
+  <!-- Define the size of the robot's main chassis in meters -->
+  <xacro:property name="base_width" value="6.42"/>
+  <xacro:property name="base_length" value="2.8"/>
+  <xacro:property name="base_height" value="0.96"/>
+  <xacro:property name="base_mass" value="5000" /> 
+
+  <!-- Math constants -->
+  <xacro:property name="deg_to_rad" value="0.01745329251994329577"/>  
+
+  <!-- Steering link dimensions -->
+  <xacro:property name="steer_radius" value="0.05" />
+  <xacro:property name="steer_thickness" value="0.02" />
+  <xacro:property name="steer_mass" value="10" />
+
+  <!-- Axle positions -->
+  <xacro:property name="axle_offset" value="0.05" />
+  <xacro:property name="steer_offset" value="0.02" />
+  <xacro:property name="steer_height" value="${0.1 + steer_offset}" />  
+
+
+  <!-- Wheel link dimensions -->
+  <xacro:property name="wheel_radius" value="0.48" />
+  <xacro:property name="wheel_thickness" value="0.54" />
+  <xacro:property name="wheel_base" value="2.12" />
+  <xacro:property name="wheel_mass" value="500" />  
+
+  <!-- Properties -->
+  <xacro:property name="steer_effort" value="10.0"/>
+  <xacro:property name="steer_velocity" value="5.0"/>
+  <xacro:property name="steer_limit_deg" value="45.0"/>  
+
+
+  <link name="base_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 1.5707963267949"/>
+        <geometry>
+          <mesh filename="package://truck_simulation/meshes/cybertruck.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="Orange"/>
+      </visual>
+
+      <collision>
+        <geometry>
+          <box size="${base_width} ${base_length} ${base_height + 1.0}"/>
+        </geometry>
+      </collision>
+
+      <xacro:box_inertia m="6000.0" w="${base_width}" d="${base_length}" h="${base_height}"/>
+  </link>
+
+  <!-- Colour -->
+  <gazebo reference="base_link">
+    <material>Gazebo/Orange</material>
+  </gazebo>  
+
+<!-- Front steer and rear wheel joints required for ackermann_steering_controller -->
+  <link name="front_steer_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="${steer_radius}" length="${steer_thickness}"/>
+      </geometry>
+      <material name="Red" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="${steer_radius}" length="${steer_thickness}"/>
+      </geometry>
+    </collision>
+    <xacro:solid_cylinder_inertial 
+        rpy="0 0 0" xyz="0 0 0"
+        mass="${steer_mass}"
+        radius="${steer_radius}" length="${steer_thickness}" />
+  </link>
+
+  <joint name="front_steer_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="front_steer_link"/>
+    <origin xyz="${wheel_base} 0 ${steer_height}" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="${steer_effort}"
+           lower="${-180.0 * deg_to_rad}" upper="${180.0 * deg_to_rad}"
+           velocity="${steer_velocity}"/>
+  </joint>
+
+  <transmission name="front_steer_joint_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <actuator name="front_steer_joint_motor">
+      <mechanicalReduction>1</mechanicalReduction>
+      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+    </actuator>
+    <joint name="front_steer_joint">
+      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+    </joint>
+  </transmission>
+
+  <gazebo reference="front_steer_link">
+    <material>Gazebo/Red</material>
+  </gazebo>
+
+<!-- Steerable front right -->
+  <link name="front_right_steer_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="${steer_radius}" length="${steer_thickness}"/>
+      </geometry>
+      <material name="blue" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="${steer_radius}" length="${steer_thickness}"/>
+      </geometry>
+    </collision>
+    <xacro:solid_cylinder_inertial 
+        rpy="0 0 0" xyz="0 0 0"
+        mass="${steer_mass}"
+        radius="${steer_radius}" length="${steer_thickness}" />
+  </link>
+
+  <joint name="front_right_steer_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="front_right_steer_link"/>
+    <origin xyz="${wheel_base} -0.75 ${steer_height}" rpy="0 0 0"/>
+    <origin xyz="${wheel_base} 0 ${steer_height}" rpy="0 0 0"/>
+
+    <axis xyz="0 0 1"/>
+    <limit effort="${steer_effort}"
+          lower="${steer_limit_deg * deg_to_rad * -1.0}" upper="${steer_limit_deg * deg_to_rad}"
+          velocity="${steer_velocity}"/>
+  </joint>
+
+  <link name="front_right_wheel_link">
+      <visual>
+          <origin xyz="0 0 0" rpy="0 0 ${90 * deg_to_rad}"/>
+        <geometry>
+          <mesh filename="package://truck_simulation/meshes/wheel1.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="Black" />
+      </visual>
+      <collision>
+          <origin xyz="0 0 0" rpy="0 0 ${90 * deg_to_rad}"/>
+        <geometry>
+          <mesh filename="package://truck_simulation/meshes/wheel1.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+      <!-- <xacro:box_inertia m="1000.0" w="${wheel_radius}" d="${wheel_thickness}" h="${wheel_radius}"/> -->
+  </link>
+
+  <joint name="front_right_wheel_joint" type="continuous">
+    <parent link="front_right_steer_link"/>
+    <child link="front_right_wheel_link"/>
+    <origin xyz="0 -0.25 -0.45" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+
+  <transmission name="front_right_steer_joint_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <actuator name="front_right_steer_joint_motor">
+      <mechanicalReduction>1</mechanicalReduction>
+      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+    </actuator>
+    <joint name="front_right_steer_joint">
+      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+    </joint>
+  </transmission>
+
+  <transmission name="front_right_wheel_joint_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <actuator name="front_right_wheel_joint_motor">
+      <mechanicalReduction>1</mechanicalReduction>
+      <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+    </actuator>
+    <joint name="front_right_wheel_joint">
+      <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+    </joint>
+  </transmission>
+
+  <gazebo reference="front_right_wheel_link">
+    <material>Gazebo/Black</material>
+  </gazebo>
+
+  <gazebo reference="front_right_steer_link">
+    <material>Gazebo/Blue</material>
+  </gazebo>
+
+<!-- Steerable front left -->
+  <link name="front_left_steer_link">
+    <visual>
+        <origin xyz="0 0 0" rpy="0 0 1.5707963267949"/>
+      <geometry>
+        <cylinder radius="${steer_radius}" length="${steer_thickness}"/>
+      </geometry>
+      <material name="blue" />
+    </visual>
+    <collision>
+        <origin xyz="0 0 0" rpy="0 0 1.5707963267949"/>
+      <geometry>
+        <cylinder radius="${steer_radius}" length="${steer_thickness}"/>
+      </geometry>
+    </collision>
+    <xacro:solid_cylinder_inertial 
+        rpy="0 0 0" xyz="0 0 0"
+        mass="${steer_mass}"
+        radius="${steer_radius}" length="${steer_thickness}" />
+  </link>
+
+  <joint name="front_left_steer_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="front_left_steer_link"/>
+    <origin xyz="${wheel_base} 0.75 ${steer_height}" rpy="0 0 0"/>
+    <origin xyz="${wheel_base} 0 ${steer_height}" rpy="0 0 0"/>
+
+    <axis xyz="0 0 1"/>
+    <limit effort="${steer_effort}"
+          lower="${steer_limit_deg * deg_to_rad * -1.0}" upper="${steer_limit_deg * deg_to_rad}"
+          velocity="${steer_velocity}"/>
+  </joint>
+
+  <link name="front_left_wheel_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 ${-90 * deg_to_rad}"/>
+        <geometry>
+          <mesh filename="package://truck_simulation/meshes/wheel1.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="Black" />
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 ${-90 * deg_to_rad}"/>
+        <geometry>
+          <mesh filename="package://truck_simulation/meshes/wheel1.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+      <!-- <xacro:box_inertia m="1000.0" w="${wheel_radius}" d="${wheel_thickness}" h="${wheel_radius}"/> -->
+  </link>
+
+  <joint name="front_left_wheel_joint" type="continuous">
+    <parent link="front_left_steer_link"/>
+    <child link="front_left_wheel_link"/>
+    <origin xyz="0 0.25 -0.45" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+
+  <transmission name="front_left_steer_joint_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <actuator name="front_left_steer_joint_motor">
+      <mechanicalReduction>1</mechanicalReduction>
+      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+    </actuator>
+    <joint name="front_left_steer_joint">
+      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+    </joint>
+  </transmission>
+
+  <transmission name="front_left_wheel_joint_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <actuator name="front_left_wheel_joint_motor">
+      <mechanicalReduction>1</mechanicalReduction>
+      <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+    </actuator>
+    <joint name="front_left_wheel_joint">
+      <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+    </joint>
+  </transmission>
+
+  <gazebo reference="front_left_wheel_link">
+    <material>Gazebo/Black</material>
+  </gazebo>
+  
+  <gazebo reference="front_left_steer_link">
+    <material>Gazebo/Blue</material>
+  </gazebo>
+
+
+
+<!-- REAR_WHEEL -->
+  <link name="rear_wheel_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="${wheel_radius/4}" length="${wheel_thickness/2}"/>
+      </geometry>
+      <material name="Red" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="${wheel_radius/4}" length="${wheel_thickness/2}"/>
+      </geometry>
+    </collision>
+    <xacro:solid_cylinder_inertial 
+        rpy="0 0 0" xyz="0 0 0"
+        mass="${wheel_mass}"
+        radius="${wheel_radius/4}" length="${wheel_thickness/2}" />
+  </link>
+
+  <joint name="rear_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="rear_wheel_link"/>
+    <origin xyz="${-wheel_base + 0.05} 0 0" rpy="${-90 * deg_to_rad} 0 0"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+
+  <transmission name="rear_wheel_joint_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <actuator name="rear_wheel_joint_motor">
+      <mechanicalReduction>1</mechanicalReduction>
+      <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+    </actuator>
+    <joint name="rear_wheel_joint">
+      <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+    </joint>
+  </transmission>
+
+  <gazebo reference="rear_wheel_link">
+    <material>Gazebo/Red</material>
+  </gazebo>
+
+  <!-- <xacro:rear_wheel
+    name="rear"
+    parent="base"
+    wheel_radius="${wheel_radius/4}"
+    wheel_thickness="${wheel_thickness/2}"
+    wheel_mass="${wheel_mass/32}">
+    <origin xyz="${-wheel_base} 0 -0.5" rpy="${-90 * deg_to_rad} 0 0"/>
+  </xacro:rear_wheel>   -->
+
+
+<!-- left_front_wheel -->
+  <!-- <link name="joint_left_front_wheel">
+    <visual>
+      <origin rpy="-1.5707963267949 0 1.5707963267949" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.05 0.05 0.05"/>
+      </geometry>
+      <material name="green" />
+    </visual>
+    <collision>
+      <origin rpy="-1.5707963267949 0 1.5707963267949" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.05 0.05 0.05"/>
+      </geometry>
+    </collision>
+    <xacro:solid_cuboid_inertial 
+        rpy="0 0 0" xyz="0 0 0"
+        mass="5"
+        x="0.1" y="0.1" z="0.1" /> 
+  </link>
+
+  <link name="left_front_wheel">
+    <visual>
+      <origin rpy="0 0 -1.5707963267949" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://truck_simulation/meshes/wheel1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="Black"/>
+    </visual>
+  </link>
+
+  <joint name="left_front_base_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="joint_left_front_wheel"/>
+    <origin rpy="0 0 0" xyz="2.066 0.502 0.09"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-0.38" upper="0.38" effort="1000.0" velocity="0.5" />  
+  </joint>
+
+  <joint name="left_front_wheel_joint" type="continuous">
+    <parent link="joint_left_front_wheel"/>
+    <child link="left_front_wheel"/>
+    <origin rpy="0 0 0" xyz="0 0.46 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>   -->
+
+<!-- left_rear_wheel -->
+  <!-- <link name="joint_left_rear_wheel">
+    <visual>
+      <origin rpy="-1.5707963267949 0 1.5707963267949" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.05 0.05 0.05"/>
+      </geometry>
+      <material name="green" />
+    </visual>
+    <collision>
+      <origin rpy="-1.5707963267949 0 1.5707963267949" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.05 0.05 0.05"/>
+      </geometry>
+    </collision>
+    <xacro:solid_cuboid_inertial 
+        rpy="0 0 0" xyz="0 0 0"
+        mass="5"
+        x="0.1" y="0.1" z="0.1" /> 
+  </link>
+
+  <link name="left_rear_wheel">
+    <visual>
+      <origin rpy="0 0 -1.5707963267949" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://truck_simulation/meshes/wheel2.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="Black"/>
+    </visual>
+  </link>
+
+  <joint name="left_rear_base_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="joint_left_rear_wheel"/>
+    <origin rpy="0 0 0" xyz="-2.066 0.502 0.09"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-0.38" upper="0.38" effort="1000.0" velocity="0.5" />  
+  </joint>
+
+  <joint name="left_rear_wheel_joint" type="continuous">
+    <parent link="joint_left_rear_wheel"/>
+    <child link="left_rear_wheel"/>
+    <origin rpy="0 0 0" xyz="0 0.46 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>     -->
+
+
+
+<!-- right_front_wheel -->
+  <!-- <link name="joint_right_front_wheel">
+    <visual>
+      <origin rpy="-1.5707963267949 0 1.5707963267949" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.05 0.05 0.05"/>
+      </geometry>
+      <material name="green" />
+    </visual>
+    <collision>
+      <origin rpy="-1.5707963267949 0 1.5707963267949" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.05 0.05 0.05"/>
+      </geometry>
+    </collision>
+    <xacro:solid_cuboid_inertial 
+        rpy="0 0 0" xyz="0 0 0"
+        mass="5"
+        x="0.1" y="0.1" z="0.1" /> 
+  </link>
+
+  <link name="right_front_wheel">
+    <visual>
+      <origin rpy="1.5707963267949 0 -1.5707963267949" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://truck_simulation/meshes/wheel3.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="Black"/>
+    </visual>
+  </link>
+
+
+  <joint name="right_front_base_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="joint_right_front_wheel"/>
+    <origin rpy="0 0 0" xyz="2.066 -0.502 0.09"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-0.38" upper="0.38" effort="1000.0" velocity="0.5" />  
+  </joint>
+
+  <joint name="right_front_wheel_joint" type="continuous">
+    <parent link="joint_right_front_wheel"/>
+    <child link="right_front_wheel"/>
+    <origin rpy="0 0 0" xyz="0 -0.46 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>     -->
+
+<!-- right_rear_wheel -->
+  <!-- <link name="joint_right_rear_wheel">
+    <visual>
+      <origin rpy="-1.5707963267949 0 1.5707963267949" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.05 0.05 0.05"/>
+      </geometry>
+      <material name="green" />
+    </visual>
+    <collision>
+      <origin rpy="-1.5707963267949 0 1.5707963267949" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.05 0.05 0.05"/>
+      </geometry>
+    </collision>
+    <xacro:solid_cuboid_inertial 
+        rpy="0 0 0" xyz="0 0 0"
+        mass="5"
+        x="0.1" y="0.1" z="0.1" /> 
+  </link>
+
+  <link name="right_rear_wheel">
+    <visual>
+      <origin rpy="1.5707963267949 0 -1.5707963267949" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://truck_simulation/meshes/wheel4.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="Black"/>
+    </visual>
+  </link>
+
+  <joint name="right_rear_base_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="joint_right_rear_wheel"/>
+    <origin rpy="0 0 0" xyz="-2.066 -0.502 0.09"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-0.38" upper="0.38" effort="1000.0" velocity="0.5" />  
+  </joint>
+
+  <joint name="right_rear_wheel_joint" type="continuous">
+    <parent link="joint_right_rear_wheel"/>
+    <child link="right_rear_wheel"/>
+    <origin rpy="0 0 0" xyz="0 -0.46 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>   -->
+
+
+<!-- *********************** LIDAR SETUP **********************************  -->
+  <xacro:include filename="$(find robosense_description)/urdf/RS-16.urdf.xacro"/>
+  <xacro:RS-16 parent="base_link" name="robosense_F" topic="robosense_F" hz="20" samples="900" gpu="${gpu}">
+    <origin xyz="3.165 1.345 .25" rpy="0.0 3.14 -1.5707" />
+  </xacro:RS-16>
+
+  <xacro:include filename="$(find robosense_description)/urdf/RS-16.urdf.xacro"/>
+  <xacro:RS-16 parent="base_link" name="robosense_B" topic="robosense_B" hz="20" samples="900" gpu="${gpu}">
+    <origin xyz="-3.165 -1.345 .25" rpy="0.0 3.14 1.5707" />
+  </xacro:RS-16> 
+
+</robot>
